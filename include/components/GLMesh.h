@@ -77,6 +77,12 @@ namespace Sigma{
 
         void ParseMTL(std::string fname);
 
+		/**
+		 * \brief Calculates the tangent and binormal for each vertex
+		 *
+		 */
+		void ComputeTangentBasis();
+
         /**
          * \brief Add a vertex to the list.
          *
@@ -196,13 +202,15 @@ namespace Sigma{
     protected:
         // Note that these values are protected, not private! Inheriting classes get access to these
         //  basic drawing elements.
-        std::vector<unsigned int> groupIndex; // Stores which index in faces a group starts at.
-        std::vector<Face> faces; // Stores vectors of face groupings.
+        std::vector<unsigned int> groupIndex;			// Stores which index in faces a group starts at.
+        std::vector<Face> faces;						// Stores vectors of face groupings.
         std::map<unsigned int, std::string> faceGroups; // Stores a mapping of material name to face grouping
-        std::vector<Vertex> verts; // The verts that the faces refers to. Can be used for later refinement.
-        std::vector<Vertex> vertNorms;  // The vertex normals for each vert. Note that by some sleight of hand,
-                                        // we are using a vertex as a vector, since both are just 3 floats..
-        std::vector<TexCoord> texCoords; // The texture coords for each vertex.
+        std::vector<Vertex> verts;						// The verts that the faces refers to. Can be used for later refinement.
+        std::vector<Vertex> vertNorms;					// The vertex normals for each vert. Note that by some sleight of hand,
+														// we are using a vertex as a vector, since both are just 3 floats..
+		std::vector<Vertex> tangents;					// Tangents and binormals for normal mapping
+		std::vector<Vertex> binormals;
+        std::vector<TexCoord> texCoords;				// The texture coords for each vertex.
         std::vector<Color> colors;
         std::map<std::string, Material> mats;
     }; // class GLMesh

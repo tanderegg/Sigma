@@ -22,7 +22,9 @@ namespace Sigma {
 
 	// A struct to store the location for each vertex.
 	struct Vertex {
-		Vertex(float x, float y, float z) : x(x), y(y), z(z) { }
+		Vertex() : x(0.0f), y(0.0f), z(0.0f) {}
+		Vertex(float x, float y, float z) : x(x), y(y), z(z) {}
+		Vertex(glm::vec3 vec) : x(vec.x), y(vec.y), z(vec.z) {} 
 		float x,y,z;
 	};
 
@@ -49,6 +51,10 @@ namespace Sigma {
             tr = 1.0f;
             hardness = 64.0f;
             illum = 1;
+			ambientMap = 0;
+			diffuseMap = 0;
+			specularMap = 0;
+			normalMap = 0;
         }
         float ka[3];
         float kd[3];
@@ -56,7 +62,7 @@ namespace Sigma {
         float tr; // Aka d
         float hardness;
         int illum;
-        // TODO: Add maps
+        
         GLuint ambientMap;
         GLuint diffuseMap;
         GLuint specularMap;
@@ -157,6 +163,8 @@ namespace Sigma {
 		int UVBufIndex;
 		int ColorBufIndex;
 		int NormalBufIndex;
+		int TangentBufIndex;
+		int BiNormalBufIndex;
 
 	protected:
 		unsigned int buffers[10]; // The various buffer IDs.

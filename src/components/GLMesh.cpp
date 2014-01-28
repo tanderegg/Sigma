@@ -28,6 +28,8 @@ namespace Sigma{
         this->VertBufIndex = 0;
         this->NormalBufIndex = 3;
         this->UVBufIndex = 4;
+		this->TangentBufIndex = 5;
+		this->BiNormalBufIndex = 6;
     }
 
     void GLMesh::InitializeBuffers() {
@@ -89,6 +91,26 @@ namespace Sigma{
             glVertexAttribPointer(normalLocation, 3, GL_FLOAT, GL_FALSE, 0, 0);
             glEnableVertexAttribArray(normalLocation);
         }
+		if (this->tangents.size() > 0) {
+			if (this->buffers[this->TangentBufIndex] == 0) {
+                glGenBuffers(1, &this->buffers[this->TangentBufIndex]);
+            }
+            glBindBuffer(GL_ARRAY_BUFFER, this->buffers[this->TangentBufIndex]);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex)*this->tangents.size(), &this->tangents[0], GL_STATIC_DRAW);
+            GLint tangentLocation = glGetAttribLocation((*shader).GetProgram(), "in_Tangent");
+            glVertexAttribPointer(tangentLocation, 3, GL_FLOAT, GL_FALSE, 0, 0);
+            glEnableVertexAttribArray(tangentLocation);
+		}
+		if (this->binormals.size() > 0) {
+			if (this->buffers[this->BiNormalBufIndex] == 0) {
+                glGenBuffers(1, &this->buffers[this->BiNormalBufIndex]);
+            }
+            glBindBuffer(GL_ARRAY_BUFFER, this->buffers[this->BiNormalBufIndex]);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex)*this->binormals.size(), &this->binormals[0], GL_STATIC_DRAW);
+            GLint binormalLocation = glGetAttribLocation((*shader).GetProgram(), "in_Binormal");
+            glVertexAttribPointer(binormalLocation, 3, GL_FLOAT, GL_FALSE, 0, 0);
+            glEnableVertexAttribArray(binormalLocation);
+		}
 
         glBindVertexArray(0); // Reset the buffer binding because we are good programmers.
 
@@ -99,8 +121,10 @@ namespace Sigma{
 		this->shader->AddUniform("texEnabled");
 		this->shader->AddUniform("ambientTexEnabled");
 		this->shader->AddUniform("diffuseTexEnabled");
+		this->shader->AddUniform("normalTexEnabled");
 		this->shader->AddUniform("texAmb");
 		this->shader->AddUniform("texDiff");
+		this->shader->AddUniform("texNormal");
 		this->shader->AddUniform("specularHardness");
 		this->shader->UnUse();
     }
@@ -151,6 +175,15 @@ namespace Sigma{
 					glBindTexture(GL_TEXTURE_2D, mat.diffuseMap);
 				} else {
 					glUniform1i((*this->shader)("diffuseTexEnabled"), 0);
+				}
+
+				if (mat.normalMap) {
+					glUniform1i((*this->shader)("normalTexEnabled"), 1);
+					glUniform1i((*this->shader)("texNormal"), 2);
+					glActiveTexture(GL_TEXTURE2);
+					glBindTexture(GL_TEXTURE_2D, mat.normalMap);
+				} else {
+					glUniform1i((*this->shader)("normalTexEnabled"), 0);
 				}
 
 				glUniform1f((*this->shader)("specularHardness"), mat.hardness);
@@ -417,6 +450,9 @@ namespace Sigma{
 
 			surfaceNorms.clear();
 		}
+
+		this->ComputeTangentBasis();
+
 		return true;
     } // function LoadMesh
 
@@ -582,5 +618,97 @@ namespace Sigma{
             }
         }
     } // function ParseMTL
+
+	void GLMesh::ComputeTangentBasis() {
+		this->tangents.resize(this->verts.size());
+		this->binormals.resize(this->verts.size());
+
+		// for each vertex, compute tangent and binormal
+		for(unsigned int i=0; i < this->faces.size(); i++) {
+			Face & currentFace = this->faces[i];
+			glm::vec3 currentVerts[3];
+			glm::vec2 currentUVs[3];
+
+			currentVerts[0] = glm::vec3(this->verts[currentFace.v1].x,this->verts[currentFace.v1].y,this->verts[currentFace.v1].z);
+			currentVerts[1] = glm::vec3(this->verts[currentFace.v2].x,this->verts[currentFace.v2].y,this->verts[currentFace.v2].z);
+			currentVerts[2] = glm::vec3(this->verts[currentFace.v3].x,this->verts[currentFace.v3].y,this->verts[currentFace.v3].z);
+
+			currentUVs[0] = glm::vec2(this->texCoords[currentFace.v1].u, this->texCoords[currentFace.v1].v);
+			currentUVs[1] = glm::vec2(this->texCoords[currentFace.v2].u, this->texCoords[currentFace.v2].v);
+			currentUVs[2] = glm::vec2(this->texCoords[currentFace.v3].u, this->texCoords[currentFace.v3].v);
+
+			// Edges of the triangle
+			glm::vec3 deltaPos1 = currentVerts[1] - currentVerts[0];
+			glm::vec3 deltaPos2 = currentVerts[2] - currentVerts[0];
+
+			// UV delta
+			glm::vec2 deltaUV1 = currentUVs[1] - currentUVs[0];
+			glm::vec2 deltaUV2 = currentUVs[2] - currentUVs[1];
+
+			float r = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x);
+			
+			Vertex tan = (deltaPos1 * deltaUV2.y - deltaPos2 * deltaUV1.y)*r;
+			Vertex bin = (deltaPos2 * deltaUV1.x - deltaPos1 * deltaUV2.x)*r;
+
+			glm::vec3 tangent(tan.x, tan.y, tan.z);
+			glm::vec3 binormal(bin.x, bin.y, bin.z);
+			
+			glm::vec3 normal(this->vertNorms[currentFace.v1].x,
+							 this->vertNorms[currentFace.v1].y,
+							 this->vertNorms[currentFace.v1].z);
+
+			glm::vec3 currTangent;
+
+			if (glm::dot(glm::cross(normal, tangent), binormal) < 0.0f){
+				currTangent = tangent * -1.0f;
+			} else {
+				currTangent = tangent;
+			}
+
+			this->tangents[currentFace.v1].x = currTangent.x;
+			this->tangents[currentFace.v1].y = currTangent.y;
+			this->tangents[currentFace.v1].z = currTangent.z;
+
+			normal = glm::vec3(this->vertNorms[currentFace.v2].x,
+							   this->vertNorms[currentFace.v2].y,
+							   this->vertNorms[currentFace.v2].z);
+
+			if (glm::dot(glm::cross(normal, tangent), binormal) < 0.0f){
+				 currTangent = tangent * -1.0f;
+			} else {
+				currTangent = tangent;
+			}
+
+			this->tangents[currentFace.v2].x = currTangent.x;
+			this->tangents[currentFace.v2].y = currTangent.y;
+			this->tangents[currentFace.v2].z = currTangent.z;
+
+			normal = glm::vec3(this->vertNorms[currentFace.v3].x,
+							   this->vertNorms[currentFace.v3].y,
+							   this->vertNorms[currentFace.v3].z);
+
+			if (glm::dot(glm::cross(normal, tangent), binormal) < 0.0f){
+				 currTangent = tangent * -1.0f;
+			} else {
+				currTangent = tangent;
+			}
+
+			this->tangents[currentFace.v3].x = currTangent.x;
+			this->tangents[currentFace.v3].y = currTangent.y;
+			this->tangents[currentFace.v3].z = currTangent.z;
+
+			this->binormals[currentFace.v1].x = binormal.x;
+			this->binormals[currentFace.v1].y = binormal.y;
+			this->binormals[currentFace.v1].z = binormal.z;
+
+			this->binormals[currentFace.v2].x = binormal.x;
+			this->binormals[currentFace.v2].y = binormal.y;
+			this->binormals[currentFace.v2].z = binormal.z;
+
+			this->binormals[currentFace.v3].x = binormal.x;
+			this->binormals[currentFace.v3].y = binormal.y;
+			this->binormals[currentFace.v3].z = binormal.z;
+		}
+	}
 
 } // namespace Sigma
